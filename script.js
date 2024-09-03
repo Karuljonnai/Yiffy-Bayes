@@ -31,19 +31,19 @@
  * "Basic " followed by "\<Username\>:\<API Token\>" encoded in Base64.
  * @type {string}
  */
-var auth
+var auth = null
 /**
  * Keeps track of all Tags the user has encountered, their reations to them, and their totals.
  * @type {{totals: CatArr, tags: TagData}}
  */
-var counts
+var counts = null
 /**
  * Stores the post IDs that the user has previously seen in their respective categories.
  * @type {Cats<ID[]>}
  */
-var reacted
+var reacted = null
 /** @type {{priors: CatArr, tags: TagData}} */
-var model
+var model = null
 /** @type {Post[]} */
 var results = []
 /** @type {Post[]} */
@@ -739,7 +739,7 @@ function logout() {
 	localStorage.removeItem('login')
 	localStorage.removeItem('counts')
 	localStorage.removeItem('reacts')
-	model = undefined
+	model = null
 	initData()
 }
 /**
@@ -817,7 +817,7 @@ function uploadData(file) {
 	}
 	reader.readAsText(file)
 	
-	model = undefined
+	model = null
 	initData()
 }
 /**
