@@ -181,7 +181,7 @@ async function initData() {
 	// Search for Reacted Posts
 	counts = JSON.parse(localStorage.getItem('counts'))
 	if (counts == null) {
-		if (confirm('Data not found.\nGathering new data from your account.\nThis may take a while... Please wait until it\'s done!\n\nYou could upload your own preprocessed data. Would you like to do that?\n!ONLY SAY YES IF YOU KNOW WHAT YOU\'RE DOING!')) {
+		if (!confirm('Data not found.\nGathering new data from your account.\nThis may take a while... Please wait until it\'s done. Continue?\n\nYou could cancel and upload your own preprocessed data.\n!ONLY CANCEL IF YOU KNOW WHAT YOU\'RE DOING!')) {
 			alert('Please then upload your data appropriately.\n!DO NOT USE THIS APLICATION WHILE YOU HAVE NOT UPLOADED IT YET!')
 			return
 		}
@@ -225,7 +225,7 @@ async function initData() {
 			tags: {},
 		}
 		for (const cat in seenTmp) {
-			for (const tags of seenTmp[cat]) {
+			for (const tags in seenTmp[cat]) {
 				counts.totals[catIdx[cat]]++
 				for (const tag of tags) {
 					if (!counts.tags.hasOwnProperty(tag)) counts.tags[tag] = [0, 0, 0, 0, 0]
