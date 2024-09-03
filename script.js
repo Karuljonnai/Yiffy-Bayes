@@ -190,8 +190,8 @@ async function initData() {
 		const username = /^\w+(?=:)/.exec(atob(auth.slice(6)))[0]
 		const requests = {
 			fav:     `fav:${username} status:any`,
-			like:    'votedup:by_karul status:any',
-			dislike: 'voteddown:by_karul status:any'
+			like:    'votedup:yiffybayes status:any',
+			dislike: 'voteddown:yiffybayes status:any'
 		}
 		/** @type {Cats<PostData>} */
 		let seenTmp = {
@@ -225,10 +225,10 @@ async function initData() {
 			tags: {},
 		}
 		for (const cat in seenTmp) {
-			for (const tags in seenTmp[cat]) {
+			for (const id in seenTmp[cat]) {
 				counts.totals[catIdx[cat]]++
-				for (const tag of tags) {
-					if (!counts.tags.hasOwnProperty(tag)) counts.tags[tag] = [0, 0, 0, 0, 0]
+				for (const tag of seenTmp[cat][id]) {
+					if (counts.tags[tag] == undefined) counts.tags[tag] = [0, 0, 0, 0, 0]
 					counts.tags[tag][catIdx[cat]]++
 				}
 			}
