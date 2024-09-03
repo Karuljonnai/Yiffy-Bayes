@@ -226,7 +226,7 @@ async function initData() {
 		}
 		for (const cat in seenTmp) {
 			for (const id in seenTmp[cat]) {
-				reacted[cat].push(id)
+				reacted[cat].push(parseInt(id))
 				counts.totals[catIdx[cat]]++
 				for (const tag of seenTmp[cat][id]) {
 					if (counts.tags[tag] == undefined) counts.tags[tag] = [0, 0, 0, 0, 0]
