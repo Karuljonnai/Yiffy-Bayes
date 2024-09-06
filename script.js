@@ -593,10 +593,15 @@ function bGOFT(prior, observed, total) {
 	/** @type {number} */
 	let pval = 0
 	if (total <= 512) { // Semi Exact Test
-		if (2*observed > total) p = 1-p
 		const kp = binProb(p, k, n)
 		pval = kp
-		for (let i = 0; i < k; i++) pval += binProb(p, i, n)
+		// Left Tail
+		for (let i = 0; i < k; i++) {
+			const ip = binProb(p, i, n)
+			if (ip > kp) break
+			pval += ip
+		}
+		// Right Tail
 		for (let i = n; i > k; i--) {
 			const ip = binProb(p, i, n)
 			if (ip > kp) break
