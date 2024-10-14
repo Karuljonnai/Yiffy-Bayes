@@ -198,7 +198,8 @@ select {
 	overflow-y: auto;
 	display: none;
 	> li {
-		display: flex;
+		display: grid;
+		column-count: 3;
 		justify-content: space-between;
 		padding: 5px;
 		cursor: pointer;
@@ -255,13 +256,13 @@ select {
 			border-radius: 8px;
 			border-style: none solid;
 		}
-		#favs  {color: red;}
 		#score {color: green;}
-		#p_fl  {color: orangered;}
-		#p_fv  {color: crimson;}
-		#p_lk  {color: greenyellow;}
-		#p_dl  {color: hotpink;}
+		#favs  {color: red;}
+		#p_dl  {color: lightskyblue;}
 		#p_nn  {color: gray;}
+		#p_lk  {color: greenyellow;}
+		#p_fv  {color: orangered;}
+		#p_fl  {color: crimson;}
 		#comb  {color: whitesmoke;}
 	}
 }
@@ -269,3 +270,6 @@ select {
 	height: 0;
 	width: 0;
 }
+#fav     i {color: red;}
+#like    i {color: greenyellow;}
+#dislike i {color: steelblue;}

@@ -12,7 +12,7 @@
 <body>
 	<header>
 		<div>
-			<input type="text" placeholder="Search tags (type ? to suggest matching tags)" id="query">
+			<input type="text" placeholder="Search tags (type ? after a tag to suggest matching tags)" id="query">
 			<button onclick="search()" id="src-btn"><span class="material-symbols-outlined">search</span></button>
 			<ul id="autocomplete"></ul>
 		</div>
@@ -29,24 +29,18 @@
 				<i class="material-symbols-outlined">sort</i>
 				<select id="sort" onchange="reEval()">
 					<option value="comb">Combined</option>
-					<option value="0">Fav+Like</option>
-					<option value="1">Fav</option>
+					<option value="4">Fav+Like</option>
+					<option value="3">Fav</option>
 					<option value="2">Like</option>
-					<option value="3">Dislike</option>
-					<option value="4">None</option>
+					<option value="1">None</option>
+					<option value="0">Dislike</option>
 					<option value="score">Score</option>
 					<option value="favs">Favourites</option>
 					<option value="id">ID</option>
 				</select>
 			</div>
 			<div>
-				<button onclick="reEval(true)" title="Re-Evaluate Posts."><i class="material-symbols-outlined">refresh</i></button>
-				<button title="Use SoftMax">
-					<label for="softmax">
-						<input onclick="reEval()" type="checkbox" id="softmax" checked>
-						<i class="material-symbols-outlined">thermometer</i>
-					</label>
-				</button>
+				<button onclick="reEval(true)" title="Re-Evaluate Model and Posts."><i class="material-symbols-outlined">refresh</i></button>
 				<button title="Reverse Order">
 					<label for="reverse">
 						<input onclick="reEval()" type="checkbox" id="reverse">
@@ -88,18 +82,18 @@
 		<div id="viewing-page">
 			<div id="image-container">
 				<button class="big-nav" id="prev" onclick="prevPost()" title="Previous Post"><i class="material-symbols-outlined">chevron_left</i></button>
-				<img src="https://static1.e621.net/data/f4/54/f4546535581121f47af160b8cf04f986.png" alt="Nothing here..." id="big-view">
+				<img src="" alt="Nothing here..." id="big-view">
 				<button class="big-nav" id="next" onclick="nextPost()" title="Next Post"><i class="material-symbols-outlined">chevron_right</i></button>
 			</div>
 			<div id="stats">
 				<div>
-					<span id="favs">0</span>
 					<span id="score">0</span>
-					<span id="p_fl">0</span>
-					<span id="p_fv">0</span>
-					<span id="p_lk">0</span>
+					<span id="favs">0</span>
 					<span id="p_dl">0</span>
 					<span id="p_nn">0</span>
+					<span id="p_lk">0</span>
+					<span id="p_fv">0</span>
+					<span id="p_fl">0</span>
 					<span id="comb">0</span>
 				</div>
 			</div>
