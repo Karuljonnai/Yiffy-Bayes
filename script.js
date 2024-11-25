@@ -312,8 +312,9 @@ async function searchTags(tags, pagesPerCycle = 8, cycleLimit = 16) {
  * @returns {Promise<{name: string, count: number, cat: number}[]>}
  */
 async function searchTag(tag) {
+	const headers = auth != null ? {Authorization: auth} : undefined;
 	const res = await fetch(`https://e621.net/tags.json?limit=64&search[order]=count&search[name_matches]=${tag}*`, {
-		headers: {Authorization: auth}
+		headers
 	}).then(res => res.json());
 	
 	let tags = [];
