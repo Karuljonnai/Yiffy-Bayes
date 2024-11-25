@@ -447,10 +447,8 @@ function getVal(post) {
 	const val = sort.value;
 	const idx = sort.selectedIndex;
 	if (idx == 0) return combine(post.vals.probs);
-	if (idx > 5) {
-		if (idx == 8) return post.id;
-		return post.vals[val];
-	}
+	if (idx == 3) return post.id;
+	if (idx <  3) return post.vals[val];
 	return post.vals.probs[val];
 }
 /** @this {HTMLElement} */
