@@ -1,17 +1,10 @@
 /** @typedef {number} ID */
 /** @typedef {string} Tag */
-/** @typedef {'favlike'|'fav'|'like'|'dislike'|'none'} Cat */
-/** @typedef {[number, number, number, number, number]} CatArr */
-/** @typedef {{[tag: Tag]: CatArr}} TagData */
+/** @typedef {{[tag: Tag]: Cats<number>}} TagData */
 /** @typedef {{[id: ID]: Tag[]}} PostData */
 /**
- * @template {boolean|CatArr|Post[]|Tag[]|PostData} T
- * @typedef Cats
- * @prop {T} dislike
- * @prop {T} none
- * @prop {T} like
- * @prop {T} fav
- * @prop {T} favlike
+ * @template T
+ * @typedef {T[]} Cats
  */
 /**
  * Processed Post with all its relevant information.
@@ -21,9 +14,25 @@
  * @prop {string} preview Link of post's small preview image file.
  * @prop {string} file Link of post's full image file.
  * @prop {string} type Post's type (image/video).
- * @prop {Cats<boolean>} reacts List of which reaction the user has made on this post.
- * @prop {{favs: number, score: number, probs: CatArr}} vals Post's relevant measurements (#favs, score, calculated score).
+ * @prop {number} cat Category index of post (-1 if unseen).
+ * @prop {{favs: number, score: number, probs: Cats<number>}} vals Post's relevant measurements (#favs, score, calculated score).
  */
+
+/**
+ * [Title, Colour, Icon]
+ * @typedef {Cats<string[]>}
+ */
+const CATS = [
+	['Revultion',   'red',           'sentiment_extremely_dissatisfied'],
+	['Dislike',     'orangered',     'sentiment_stressed'],
+	['Unimpressed', 'lightpink',     'sentiment_dissatisfied'],
+	['Neutral',     'gray',          'sentiment_neutral'],
+	['Appreciate',  'lightskyblue',  'sentiment_content'],
+	['Like',        'royalblue',     'sentiment_satisfied'],
+	['Adore',       'rebeccapurple', 'sentiment_excited'],
+	['Obsessed',    'deeppink',      'favorite'],
+];
+const NCats = CATS.length;
 
 /**
  * Basic Authentication
@@ -34,7 +43,7 @@
 var auth = null;
 /**
  * Keeps track of all Tags the user has encountered, their reations to them, and their totals.
- * @type {{totals: CatArr, tags: TagData}}
+ * @type {{totals: Cats<number>, tags: TagData}}
  */
 var counts = null;
 /**
@@ -42,7 +51,9 @@ var counts = null;
  * @type {Cats<ID[]>}
  */
 var reacted = null;
-/** @type {{priors: CatArr, comb_w: CatArr, tags: TagData}} */
+// /** @type {{id: ID, preview: string, file: string, type: string}[]} */
+// var saved = null;
+/** @type {{priors: Cats<number>, comb_w: Cats<number>, tags: TagData}} */
 var model = null;
 /** @type {Post[]} */
 var results = [];
@@ -56,18 +67,7 @@ var endPage  =  0;
 var postsPerPage = 180;
 
 /**
- * Category to Index quick Look-Up-Table.
- * @type {Cats<number>}
- * */
-const catIdx = {
-	dislike: 0,
-	none:    1,
-	like:    2,
-	fav:     3,
-	favlike: 4,
-};
-/**
- * Look Up Table for e621's tag category numbers and their associated colours.
+ * Look-Up-Table for e621's tag category numbers and their associated colours.
  */
 const tagCatColour = [
 	'#2e76b4', // General
@@ -79,8 +79,20 @@ const tagCatColour = [
 	'#ffffff', // Meta
 	'#228822', // Lore
 ];
+/**
+ * Look-Up-Table to convert posts
+ */
+const e6RatingConvTable = {
+	dislike: 1,
+	like:    4,
+	fav:     5,
+	favlike: 6,
+}
+
+initDOM();
 
 // DOM Elements
+const logBtn   = document.querySelector('#log-btn');
 const grid     = document.querySelector('#img-grid');
 const query    = document.querySelector('#query');
 const autocomp = document.querySelector('#autocomplete');
@@ -95,16 +107,16 @@ const dislike  = document.querySelector('#dislike');
 const upload   = document.querySelector('#upload');
 const titleSt  = document.querySelector('#state label');
 const iconSt   = document.querySelector('#state label i');
+const srcBtn   = document.querySelector('#src-btn');
+const srcIcn   = document.querySelector('#src-btn span');
 const favs     = document.querySelector('#favs');
 const score    = document.querySelector('#score');
-const p_dl     = document.querySelector('#p_dl');
-const p_nn     = document.querySelector('#p_nn');
-const p_lk     = document.querySelector('#p_lk');
-const p_fv     = document.querySelector('#p_fv');
-const p_fl     = document.querySelector('#p_fl');
 const comb     = document.querySelector('#comb');
 const prefetch = document.querySelector('#prefetch');
+const intBtns  = document.querySelector('#interaction-buttons');
+const pProbs   = document.querySelectorAll('.post-probs');
 const pageNums = document.querySelectorAll('.page-numbers');
+const rateBtns = document.querySelectorAll('.rate-buttons');
 
 upload.addEventListener('change', (event) => {
 	const file = event.target.files[0];
@@ -147,105 +159,85 @@ query.addEventListener('keyup', async (event) => {
 
 initData();
 
+function initDOM() {
+	const rateBtns  = document.querySelector('#rate-buttons');
+	const postProbs = document.querySelector('#post-probs');
+	const sorts     = document.querySelector('#sort');
+	for (const i in CATS) {
+		let btn  = document.createElement('button');
+		let icon = document.createElement('i');
+		let span = document.createElement('span');
+		let opt  = document.createElement('option');
+		
+		btn.onclick = ratePost;
+		icon.style.fontSize = '2rem';
+		icon.className   = 'material-symbols-outlined';
+		span.className   = 'post-probs';
+		btn.className    = 'rate-buttons';
+		opt.value        = i;
+		btn.value        = i;
+		span.innerText   = 0;
+		opt.innerText    = CATS[i][0];
+		btn.title        = CATS[i][0];
+		span.title       = CATS[i][0];
+		icon.style.color = CATS[i][1];
+		span.style.color = CATS[i][1];
+		icon.innerText   = CATS[i][2];
+		
+		btn.appendChild(icon);
+		rateBtns.appendChild(btn);
+		postProbs.appendChild(span);
+		sorts.appendChild(opt);
+	}
+	
+	// let save = document.createElement('button');
+	// let icon = document.createElement('i');
+	
+	// save.onclick = savePost;
+	// icon.style.fontSize = '2rem';
+	// save.title       = 'Save';
+	// icon.className   = 'material-symbols-outlined';
+	// icon.style.color = 'green';
+	// icon.innerText   = 'bookmark';
+	
+	// save.appendChild(icon);
+	// rateBtns.appendChild(save);
+}
 /**
- * If the user is already signed in, simply loads the necessary data from local storage.
- * Otherwise, prompts the user to input the necessary e621 account information, and then
- * must perform a lengthy search through e621 to gather the user's data: reacted posts, favs,
- * likes, and dislikes, but it wouldn't be possible to retrieve posts that the user has seen,
- * but didn't rate.
- * 
- * The user may skip that lengthy step, by choosing to upload their own precompiled data, either
- * by a previous download of their data through this application, or by their own preprocessing.
+ * Loads data from Local Storage.
  */
 async function initData() {
 	setState('Loading Data', 'database');
 	
 	// Login
-	auth = localStorage.getItem('login');
-	while (auth == null) {
-		const login = prompt('Please enter your e621 username followed by a colon and then your API access key.\ne.g.: User123:APIKey0a1b2c3d\nYou can get it at https://e621.net/users/home -> Manage API Access');
-		if (/^\w+:\w+$/.test(login)) {
-			auth = `Basic ${btoa(login)}`;
-			localStorage.setItem('login', auth);
-			break;
-		}
-		alert('Your Login was not inputted correctly.\nYou need to login to use this application.\nPlease try again.');
+	auth = localStorage.getItem('auth');
+	if (auth != null) {
+		intBtns.style.display = 'flex';
+		logBtn.title   = 'Logout';
+		logBtn.onclick = logout;
+		logBtn.firstChild.innerText = 'logout';
 	}
 	
 	// Get seen post IDs
 	reacted = JSON.parse(localStorage.getItem('reacted'));
 	if (reacted == null) {
-		reacted = {
-			dislike: [],
-			none:    [],
-			like:    [],
-			fav:     [],
-			favlike: [],
-		};
+		reacted = new Array(NCats);
+		for (let i = 0; i < NCats; i++) reacted[i] = [];
 	}
 	
 	// Search for Reacted Posts
 	counts = JSON.parse(localStorage.getItem('counts'));
 	if (counts == null) {
-		if (!confirm('Data not found.\nGathering new data from your account.\nThis may take a while... Please wait until it\'s done. Continue?\n\nYou could cancel and upload your own preprocessed data.\n!ONLY CANCEL IF YOU KNOW WHAT YOU\'RE DOING!')) {
-			alert('Please then upload your data appropriately.\n!DO NOT USE THIS APLICATION WHILE YOU HAVE NOT UPLOADED IT YET!');
-			return;
-		}
-		
-		// Gather user's reacted posts
-		const username = /^\w+(?=:)/.exec(atob(auth.slice(6)))[0];
-		const requests = {
-			fav:     `fav:${username} status:any`,
-			like:    'votedup:yiffybayes status:any',
-			dislike: 'voteddown:yiffybayes status:any'
-		};
-		/** @type {Cats<PostData>} */
-		let seenTmp = {
-			dislike: {},
-			none:    {},
-			like:    {},
-			fav:     {},
-			favlike: {},
-		};
-		results = [];
-		for (const cat in requests) {
-			await searchTags(requests[cat]);
-			for (const post of results) seenTmp[cat][post.id] = post.tags;
-			results = [];
-		}
-		
-		// Get Favlikes from Fav & Like duplicates
-		for (const favId in seenTmp.fav) {
-			for (const likeId in seenTmp.like) {
-				if (favId == likeId) {
-					seenTmp.favlike[favId] = seenTmp.fav[favId];
-					delete seenTmp.fav[favId];
-					delete seenTmp.like[likeId];
-					break;
-				}
-			}
-		}
-		// Count the tags in each category
 		counts = {
-			totals: [0, 0, 0, 0, 0],
+			totals: new Array(NCats).fill(0),
 			tags: {},
 		};
-		for (const cat in seenTmp) {
-			for (const id in seenTmp[cat]) {
-				reacted[cat].push(parseInt(id));
-				counts.totals[catIdx[cat]]++;
-				for (const tag of seenTmp[cat][id]) {
-					if (counts.tags[tag] == undefined) counts.tags[tag] = [0, 0, 0, 0, 0];
-					counts.tags[tag][catIdx[cat]]++;
-				}
-			}
-		}
 	}
 	
 	// Initialise an empty model
 	model = {
-		priors: [0, 0, 0, 0, 0],
-		comb_w: [0, 0, 0, 0, 0],
+		priors: new Array(NCats).fill(0),
+		comb_w: new Array(NCats).fill(0),
 		tags: {},
 	};
 	
@@ -271,6 +263,7 @@ function storeData() {
  * model accordingly.
  */
 async function search() {
+	if (srcBtn.disabled) return;
 	currPost = -1;
 	currPage =  0;
 	pageNums.forEach(paginate => paginate.replaceChildren());
@@ -278,7 +271,7 @@ async function search() {
 	results = [];
 	wait = searchTags(query.value);
 	updateModel();
-	setState('Fetching Pages', 'wifi');
+	setState('Fetching Pages', 'wifi', true);
 	await wait;
 	setState();
 	reEval(false);
@@ -297,9 +290,10 @@ async function searchTags(tags, pagesPerCycle = 8, cycleLimit = 16) {
 	outer: for (let cycle = 0; cycle < cycleLimit; cycle++) {
 		let promises = [];
 		for (let page = cycle * pagesPerCycle +1; page <= (cycle + 1) * pagesPerCycle; page++) {
+			const headers = auth != null ? {Authorization: auth} : undefined;
 			promises.push(
 				fetch(`https://e621.net/posts.json?limit=${postLimit}&page=${page}&tags=${tags}`, {
-					headers: {Authorization: auth}
+					headers
 				}).then(res => res.json())
 			);
 		}
@@ -343,11 +337,12 @@ function addPosts(posts) {
 			preview: post.preview.url,
 			file:    post.file.url,
 			tags:    extractTags(post.tags),
-			reacts:  getReacts(post.id),
+			cat:     getCat(post.id),
+			// saved:   isSaved(post.id),
 			vals: {
 				score: post.score.total,
 				favs:  post.fav_count,
-				probs: [0, 0, 0, 0, 0]
+				probs: new Array(NCats).fill(0),
 			}
 		});
 	}
@@ -370,7 +365,7 @@ function showPosts() {
 		
 		if (wasSeen(post)) article.classList.add('seen');
 		
-		article.classList.add('img-res');
+		article.classList.add('preview');
 		a.id = i;
 		a.href = '#viewing-page';
 		a.onclick = view;
@@ -428,14 +423,11 @@ function shouldSkipPost(post) {
 /**
  * Searches through the local data to see which reation the user had with that post.
  * @param {ID} id
- * @returns {Cats<boolean>}
+ * @returns {number}
  */
-function getReacts(id) {
-	let reacts = {};
-	
-	for (const cat in reacted) reacts[cat] = reacted[cat].includes(id);
-	
-	return reacts;
+function getCat(id) {
+	for (const cat in CATS) if (reacted[cat].includes(id)) return cat;
+	return -1;
 }
 /**
  * Sorts the search's resulted posts.
@@ -503,56 +495,53 @@ function gotoPage() {
  */
 function showBigPost() {
 	let post = filtered[currPost];
-	if (!wasSeen(post)) updatePost(post, 'none', true);
+	if (!wasSeen(post)) updatePost(post, 3);
 	
 	back.href = `#${currPost}`;
 	ori.href  = `https://e621.net/posts/${post.id}`;
 	document.getElementById(currPost).parentElement.classList.add('seen');
 	
-	fav.className     = (post.reacts.favlike || post.reacts.fav)  ? 'voted' : '';
-	like.className    = (post.reacts.favlike || post.reacts.like) ? 'voted' : '';
-	dislike.className =  post.reacts.dislike ? 'voted' : '';
-	
 	favs.innerText  = post.vals.favs;
 	score.innerText = post.vals.score;
-	p_dl.innerText  = post.vals.probs[0];
-	p_nn.innerText  = post.vals.probs[1];
-	p_lk.innerText  = post.vals.probs[2];
-	p_fv.innerText  = post.vals.probs[3];
-	p_fl.innerText  = post.vals.probs[4];
+	for (const i in CATS) pProbs.item(i).innerText = post.vals.probs[i];
 	comb.innerText  = combine(post.vals.probs);
+	setRateIndicator(post.cat);
 	
 	const bigMedia = document.createElement(post.type);
 	bigMedia.src = post.file;
 	bigMedia.id  = 'big-view';
-	bigMedia.alt = 'Nothing here...';
+	bigMedia.alt = 'Oops, something went wrong!\nCouldn\'t display media...';
 	bigMedia.controls = true;
 	bigMedia.loop     = true;
 	document.querySelector('#big-view').replaceWith(bigMedia);
 	
 	// Prefetch next post
-	if (currPost < filtered.length -1) prefetch.src = filtered[currPost +1].file;
+	if (currPost +1 < filtered.length) prefetch.src = filtered[currPost +1].file;
+}
+function setRateIndicator(cat) {
+	rateBtns.forEach((btn) => {btn.classList.remove('set');});
+	if (cat != -1) {rateBtns.item(cat).classList.add('set');}
 }
 /**
  * Evaluated the post using a custom Content-Based Filtering Recommender System, inspired by
  * the Naive Bayes Classifier.
  * @param {Tag[]} tags
- * @returns {CatArr}
+ * @returns {Cats<number>}
  */
 function evalPost(tags) {
 	// Difference Naive Bayes
-	/** @type {CatArr} */
+	/** @type {Cats<number>} */
 	let probs = model.priors.slice();
 	
 	for (const tag of tags) {
 		const update = model.tags[tag];
 		if (update == undefined) continue;
-		for (const i in update) probs[i] += update[i];
+		for (const cat in CATS) probs[cat] += update[cat];
 	}
 	
 	return probs;
 }
-/** @param {CatArr} arr */
+/** @param {number[]} arr */
 function softmax(arr) {
 	const max = Math.max(...arr);
 	for (const i in arr) arr[i] = Math.exp(arr[i] - max);
@@ -582,14 +571,15 @@ function accumulate(arr) {
 	
 	return cum;
 }
-/** @param {CatArr} arr */
+/** @param {number[]} arr */
 function normalise(arr) {
 	const total = sum(arr);
 	for (const i in arr) arr[i] /= total;
 }
 /**
- * @param {CatArr} priors
- * @param {CatArr} observed
+ * G-Test of Goodness Of Fit
+ * @param {Cats<number>} priors
+ * @param {Cats<number>} observed
  * @returns {number}
  */
 function gGOFT(priors, observed) {
@@ -600,7 +590,7 @@ function gGOFT(priors, observed) {
 	let g = 0;
 	for (const i in priors) if (observed[i] > 0) g += observed[i] * Math.log(observed[i] / expected[i]);
 	
-	return chi2dist4(williamCorr(2*g, total, 5));
+	return chi2cum(NCats -1, williamCorr(2*g, total, NCats));
 }
 /**
  * Binomial Goodness Of Fit Test
@@ -637,7 +627,7 @@ function bGOFT(prior, observed, total) {
 		const c = n-k;
 		if (k > 0) pval += k * Math.log(k / e);
 		if (c > 0) pval += c * Math.log(c / (n - e));
-		pval = chi2dist1(williamCorr(2*pval, n, 2));
+		pval = chi2cum(1, williamCorr(2*pval, n, 2));
 	}
 	
 	return pval;
@@ -654,26 +644,34 @@ function binProb(p, i, n) {
 	return Math.exp(lnChoose(n,i) + i*Math.log(p) + (n-i)*Math.log(1-p));
 }
 /**
- * Approximation of the tail distribution of chi squared for 1 degree of freedom.
+ * Chi-Squared Cummulative Right Tail Distribution.
+ * Gives the appropriate p-value for a Chi-Squared Goodness Of Fit Test.
+ * 
+ * Essentially: `Integral from chi2 to +Inf of t^(df/2-1)*e^(t/2)*2^(-df/2)/Gamma(df/2)*dt`
+ * @param {number} df Degrees of Freedom
  * @param {number} chi2
- * @returns {number}
  */
-function chi2dist1(chi2) {
-	return 1 - erf(Math.sqrt(chi2 / 2));
-}
-/**
- * Exact tail distribution of chi squared for 4 degree of freedom.
- * @param {number} chi2
- * @returns {number}
- */
-function chi2dist4(chi2) {
-	return 0.5 * (chi2 + 2) * Math.exp(-0.5 * chi2);
+function chi2cum(df, chi2) {
+	if (df < 0 || !Number.isInteger(df)) return NaN;
+	const rem = df % 2;
+	const lim = Math.floor(df/2);
+	let res = lim > 0 ? 1 : 0;
+	let div = 1;
+	for (let i = 1; i < lim; i++) {
+		div *= 2*i + rem;
+		res += Math.pow(chi2, i) / div;
+	}
+	res *= Math.exp(-0.5*chi2);
+	if (rem == 1) {
+		res = 1 - erf(Math.sqrt(chi2*0.5)) + Math.sqrt(2*chi2/Math.PI) * res;
+	}
+	return res;
 }
 /**
  * William's Correction
  * @param {number} chi2
- * @param {number} n
- * @param {number} k
+ * @param {number} n Total sample size
+ * @param {number} k Number of Categories
  * @returns {number}
  */
 function williamCorr(chi2, n, k) {
@@ -681,7 +679,7 @@ function williamCorr(chi2, n, k) {
 	const q = snv / (snv + k*k -1);
 	return chi2 * q;
 }
-const K_lnfac = Math.log(2*Math.PI)/2;
+const lnfac_K = Math.log(2*Math.PI)/2;
 /**
  * Approximation of `ln(x!)`
  * @param {number} x
@@ -689,20 +687,20 @@ const K_lnfac = Math.log(2*Math.PI)/2;
  */
 function lnfac(x) {
 	if (x <= 1.097952) return x*(x -1) / (2*Math.log(x + 2.325));
-	return K_lnfac + Math.log(x)/2 + x*(Math.log(x + 1/(12*x)) -1);
+	return lnfac_K + Math.log(x)/2 + x*(Math.log(x + 1/(12*x)) -1);
 }
-const K_erf_0 = 2/Math.sqrt(Math.PI);
-const K_erf_1 = K_erf_0 * 11 / 123;
+const erf_K0 = 2/Math.sqrt(Math.PI);
+const erf_K1 = erf_K0 * 11 / 123;
 /**
  * Approximation of the Error Function
  * @param {number} x
  * @returns {number}
  */
 function erf(x) {
-	return Math.tanh(K_erf_0*x + K_erf_1*x*x*x);
+	return Math.tanh(erf_K0*x + erf_K1*x*x*x);
 }
-const K_erfinv_0 = 0.147;
-const K_erfinv_1 = 2/(Math.PI * K_erfinv_0);
+const erfinv_K0 = 0.147;
+const erfinv_K1 = 2/(Math.PI * erfinv_K0);
 /**
  * Approximation of the inverse of the Error Function
  * @param {number} x
@@ -713,16 +711,8 @@ function erfinv(x) {
 	if (x >= +1) return +Infinity;
 	
 	const a = Math.log(1 - x*x);
-	const b = K_erfinv_1 + a/2;
-	return Math.sign(x) * Math.sqrt(Math.sqrt(b*b - a/K_erfinv_0) - b);
-}
-/**
- * Sigmoid/Logistic Function
- * @param {number} x
- * @returns {number}
- */
-function sigmoid(x) {
-	return 1 / (1 + Math.exp(-x));
+	const b = erfinv_K1 + a/2;
+	return Math.sign(x) * Math.sqrt(Math.sqrt(b*b - a/erfinv_K0) - b);
 }
 /**
  * Approximation of `ln(n choose k)`
@@ -748,12 +738,13 @@ function extractTags(_tags) {
  * Deletes all user data.
  */
 function logout() {
-	if (!confirm('Are you sure you want to logout?\nYou will lose all your local data.')) return;
-	localStorage.removeItem('login');
-	localStorage.removeItem('counts');
-	localStorage.removeItem('reacts');
-	model = null;
-	initData();
+	if (!confirm('Are you sure you want to logout?\nYou won\'t be able to rate posts on e621 through here.')) return;
+	localStorage.removeItem('auth');
+	auth = null;
+	intBtns.style.display = 'none';
+	logBtn.title   = 'Login';
+	logBtn.onclick = login;
+	logBtn.firstChild.innerText = 'login';
 }
 /**
  * Updates the model's weights if `update` is true.
@@ -772,21 +763,32 @@ function reEval(update = false) {
  * 
  * Adds the post to the provided category if `inc` is true, removes it otherwise.
  * @param {Post} post
- * @param {Cat} cat
- * @param {boolean} inc
+ * @param {number} cat
  */
-function updatePost(post, cat, inc) {
-	const idx = catIdx[cat];
-	const val = inc ? +1 : -1;
-	
-	if (inc) reacted[cat].push(post.id);
-	else reacted[cat].splice(reacted[cat].indexOf(post.id), 1);
-	
-	post.reacts[cat] = inc;
-	counts.totals[idx] += val;
-	for (const tag of post.tags) {
-		if (counts.tags[tag] == undefined) counts.tags[tag] = [0, 0, 0, 0, 0];
-		counts.tags[tag][idx] += val;
+function updatePost(post, cat) {
+	if (post.cat == cat) return;
+	// Remove from previous category
+	if (post.cat != -1) {
+		reacted[post.cat].splice(reacted[post.cat].indexOf(post.id));
+		updateTags(post.tags, post.cat, -1);
+	}
+	// Add to new category
+	reacted[cat].push(post.id);
+	updateTags(post.tags, cat, +1);
+	// Update post rating
+	post.cat = cat;
+}
+/**
+ * 
+ * @param {Tag[]} tags
+ * @param {number} cat
+ * @param {number} val
+ */
+function updateTags(tags, cat, val) {
+	counts.totals[cat] += val;
+	for (const tag of tags) {
+		if (counts.tags[tag] == undefined) counts.tags[tag] = new Array(NCats).fill(0);
+		counts.tags[tag][cat] += val;
 	}
 }
 /** @param {Iterable<Tag> | null} alteredTags */
@@ -807,8 +809,8 @@ function updateModel(alteredTags) {
 	setState();
 }
 /**
- * @param {CatArr} totals
- * @returns {CarArr}
+ * @param {Cats<number>} totals
+ * @returns {Cats<number>}
  */
 function initPriors(totals) {
 	let priors = totals.slice();
@@ -821,13 +823,13 @@ function initPriors(totals) {
 /**
  * Does all the necessary calculation of the tag weights for the model using statistical
  * methods.
- * @param {CatArr} priors
- * @param {CatArr} observed
- * @returns {CatArr}
+ * @param {Cats<number>} priors
+ * @param {Cats<number>} observed
+ * @returns {Cats<number>}
  */
 function initWeights(priors, observed) {
 	const total = sum(observed);
-	if (total <= 0) return [0, 0, 0, 0, 0];
+	if (total <= 0) return new Array(NCats).fill(0);
 	
 	var probs = observed.slice();
 	normalise(probs);
@@ -847,11 +849,11 @@ function initWeights(priors, observed) {
 	
 	return probs;
 }
-const K_initCombineW = 1/Math.sqrt(2*Math.PI);
+const initCombineW_K = 1/Math.sqrt(2*Math.PI);
 /**
  * Initialises the combining weights according to priors
- * @param {CatArr} priors
- * @returns {CatArr}
+ * @param {Cats<number>} priors
+ * @returns {Cats<number>}
  */
 function initCombineW(priors) {
 	let comb_w = accumulate(priors);
@@ -864,7 +866,7 @@ function initCombineW(priors) {
 		let a = b;
 		b = comb_w[i];
 		// Centre of Mass of the Normal Distribution between a and b
-		comb_w[i] = K_initCombineW * (Math.exp(-a*a/2) - Math.exp(-b*b/2)) / priors[i];
+		comb_w[i] = initCombineW_K * (Math.exp(-a*a/2) - Math.exp(-b*b/2)) / priors[i];
 	}
 	
 	return comb_w;
@@ -903,6 +905,7 @@ function uploadData(file) {
  */
 function downloadData() {
 	const data = {
+		version: 'YiffyBayes 2S',
 		reacted: reacted,
 		counts:  counts,
 	};
@@ -910,139 +913,67 @@ function downloadData() {
 	let download      = document.createElement('a');
 	download.href     = 'data:application/json,' + encodeURI(JSON.stringify(data));
 	download.target   = '_blank';
-	download.download = 'e6data.json';
+	download.download = 'YiffyBayes.json';
 	download.click();
 }
 /**
- * Handles the logic behind reacting to a post, from API to updating the counts accordingly.
- * @param {Event} event
+ * Handles the logic behind reacting to a post on e621.
+ * @this {Element}
  */
-async function reactToPost(event) {
+async function e6React() {
 	setState('Reacting to Post', 'thumbs_up_down');
-	
 	const post = filtered[currPost];
-	const btn = event.currentTarget;
-	const unvote = btn.className == 'voted';
-	btn.className = unvote ? '' : 'voted';
 	
-	if (btn.id == 'fav') {
-		if (unvote) { // Remove Fav
-			await fetch(`https://e621.net/favorites/${post.id}.json`, {
-				method: 'DELETE',
-				headers: {Authorization: auth},
-			});
-			if (post.reacts.favlike) {
-				updatePost(post, 'favlike', false);
-				updatePost(post, 'like', true);
-			} else {
-				updatePost(post, 'fav', false);
-				if (!post.reacts.dislike) updatePost(post, 'none', true);
-			}
-		} else { // Add Fav
-			const response = await fetch(`https://e621.net/favorites.json`, {
-				method: 'POST',
-				headers: {
-					Authorization: auth,
-					'Content-Type': 'application/x-www-form-urlencoded',
-				},
-				body: `post_id=${post.id}`
-			});
-			if (!response.ok) console.error(response);
-			if (post.reacts.like) {
-				updatePost(post, 'favlike', true);
-				updatePost(post, 'like', false);
-			} else {
-				updatePost(post, 'fav', true);
-				if (post.reacts.none) updatePost(post, 'none', false);
-			}
-		}
-	} else {
-		/** @type {1|-1} */
-		let vote;
-		if (unvote) {
-			if (btn.id == 'dislike') {
-				vote = -1;
-				updatePost(post, 'dislike', false);
-			} else {
-				vote = +1;
-				if (post.reacts.favlike) {
-					updatePost(post, 'favlike', false);
-					updatePost(post, 'fav', true);
-				} else updatePost(post, 'like', false);
-			}
-			if (!post.reacts.fav) updatePost(post, 'none', true);
-		} else {
-			if (btn.id == 'dislike') {
-				vote = -1;
-				like.className = '';
-				updatePost(post, 'dislike', true);
-			} else {
-				vote = +1;
-				dislike.className = '';
-				if (post.reacts.fav) {
-					updatePost(post, 'favlike', true);
-					updatePost(post, 'fav', false);
-				} else updatePost(post, 'like', true);
-			}
-			if (post.reacts.none) updatePost(post, 'none', false);
-		}
-		
-		const response = await fetch(`https://e621.net/posts/${post.id}/votes.json`, {
+	if (this.id == 'fav') {
+		await fetch(`https://e621.net/favorites.json`, {
 			method: 'POST',
 			headers: {
 				Authorization: auth,
 				'Content-Type': 'application/x-www-form-urlencoded',
 			},
-			body: `score=${vote}&no_unvote=false`
+			body: `post_id=${post.id}`
+		});
+	} else {
+		let vote = this.id == 'dislike' ? -1 : +1;
+		await fetch(`https://e621.net/posts/${post.id}/votes.json`, {
+			method: 'POST',
+			headers: {
+				Authorization: auth,
+				'Content-Type': 'application/x-www-form-urlencoded',
+			},
+			body: `score=${vote}&no_unvote=true`
 		}).then(res => res.json());
-		
-		/** @type {0|1|-1} */
-		const expectedScore = unvote ? 0 : vote;
-		/** @type {0|1|-1} */
-		const score = response.our_score;
-		// DeSync Error Recovery
-		if (expectedScore != score) {
-			btn.className = unvote ? 'voted' : '';
-			if (unvote) {
-				if (score == -1) updatePost(post, 'dislike', true);
-				else {
-					if (post.reacts.fav) updatePost(post, 'favlike', true);
-					else updatePost(post, 'like', true);
-				}
-				if (post.reacts.fav) updatePost(post, 'fav', false);
-				else updatePost(post, 'none', false);
-			} else {
-				if (expectedScore == -1) {
-					updatePost(post, 'dislike', false);
-					if (!post.reacts.fav) updatePost(post, 'none', true);
-				} else {
-					if (post.reacts.favlike) {
-						updatePost(post, 'favlike', false);
-						updatePost(post, 'fav', true);
-					} else {
-						updatePost(post, 'like', false);
-						updatePost(post, 'none', true);
-					}
-				}
-			}
-			alert('A Desync Error was encountered and recovered from, but your reaction change was not registered for that post.');
-			console.warn('Desync Error Recovered:\n' + post);
-		}
 	}
 	setState();
+}
+/**
+ * @this {Element}
+ */
+function ratePost() {
+	let post = filtered[currPost];
+	let cat  = parseInt(this.value);
+	updatePost(post, cat);
+	setRateIndicator(cat);
 }
 /**
  * Replaces the state title and icon (Material Icons Outlined) on the top navigation bar.
  * @param {string} title
  * @param {string} icon
  */
-function setState(title = 'idle', icon = 'mode_standby') {
+function setState(title = 'idle', icon = 'mode_standby', disableSearch = false) {
 	titleSt.title = title;
 	iconSt.innerText = icon;
+	if (disableSearch) {
+		srcIcn.innerText = 'progress_activity';
+		srcBtn.disabled  = true;
+	} else if (title == 'idle') {
+		srcIcn.innerText = 'search';
+		srcBtn.disabled  = false;
+	}
 }
 /**
  * Combines the posts score to a single number in a simple manner.
- * @param {CatArr} probs
+ * @param {Cats<number>} probs
  * @returns {number}
  */
 function combine(probs) {
@@ -1051,27 +982,93 @@ function combine(probs) {
 	return score;
 }
 /**
- * Checks if the post is already in the local data base of seen posts.
  * @param {Post} post
  */
 function wasSeen(post) {
-	for (const cat in post.reacts) if (post.reacts[cat]) return true;
-	return false;
+	return post.cat != -1;
 }
 /**
- * Prints the selected post's tags and their counts and weights on the console.
+ * Prints the selected post's tags, their counts, and weights on the console.
  */
 function debugPost() {
 	let table = [];
 	filtered[currPost].tags.forEach(tag => table.push([
 		tag,
-		...counts.tags[tag] ?? [0, 0, 0, 0, 0],
-		...(model.tags[tag] ?? [0, 0, 0, 0, 0])
+		...counts.tags[tag] ?? new Array(NCats).fill(0),
+		...(model.tags[tag] ?? new Array(NCats).fill(0))
 	]));
 	table.sort((a, b) => {a[0].localeCompare(b[0])});
 	table.push(table.reduce((acc, v) => {
 		for (let i = 1; i < v.length; i++) acc[i] += v[i]
 		return acc
-	}, acc = ['TOTALS', 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]));
+	}, acc = ['TOTALS', ...new Array(NCats*2).fill(0)]));
 	console.table(table);
+}
+async function login() {
+	let username = prompt('Insert your e621 username:').replaceAll(' ', '_');
+	let APIKey   = prompt('Insert your e621 API Token\nYou can get it at https://e621.net/users/home -> Manage API Access (3rd option)');
+	auth = `Basic ${btoa(`${username}:${APIKey}`)}`;
+	localStorage.setItem('auth', auth);
+	intBtns.style.display = 'flex';
+	logBtn.title   = 'Logout';
+	logBtn.onclick = logout;
+	logBtn.firstChild.innerText = 'logout';
+	
+	if (confirm('Would you like to import your data from e621 (the posts you rated) to populate the model\'s data?\n\nYiffyBayes and e621 are not 1:1 compatible on their categories, so this may give inaccurate data to the model.\nThis proccess may take a while.')) importFromE621();
+}
+async function importFromE621() {
+	setState('Importing Data from e621', 'cloud_sync', true);
+	
+	alert('Gathering new data from your account.\nThis may take a while... Wait before using YiffyBayes!\nAnother notification will apear when this proccess is done.');
+	
+	// Gather user's reacted posts
+	const username = atob(auth.slice(6)).split(':')[0];
+	const requests = {
+		fav:     `fav:${username} status:any`,
+		like:    'votedup:yiffybayes status:any',
+		dislike: 'voteddown:yiffybayes status:any',
+	};
+	let seenTmp = {
+		dislike: {},
+		none:    {},
+		like:    {},
+		fav:     {},
+		favlike: {},
+	};
+	results = [];
+	for (const cat in requests) {
+		await searchTags(requests[cat]);
+		for (const post of results) seenTmp[cat][post.id] = post.tags;
+		results = [];
+	}
+	
+	// Get Favlikes from Fav & Like duplicates
+	for (const postId in seenTmp.fav) {
+		if (seenTmp.like[postId] != undefined) {
+			seenTmp.favlike[postId] = seenTmp.fav[postId];
+			delete seenTmp.fav[postId];
+			delete seenTmp.like[postId];
+		}
+	}
+	
+	// Count the tags in each category
+	counts = {
+		totals: new Array(NCats).fill(0),
+		tags: {},
+	};
+	for (const e6Cat in seenTmp) {
+		for (let id in seenTmp[e6Cat]) {
+			const cat = e6RatingConvTable[e6Cat];
+			id = parseInt(id);
+			reacted[cat].push(id);
+			updatePost({
+				id:   id,
+				tags: seenTmp[e6Cat][id],
+				cat:  getCat(id),
+			}, cat);
+		}
+	}
+	
+	setState();
+	alert('All done!');
 }
