@@ -917,13 +917,13 @@ function downloadData() {
 }
 /**
  * Handles the logic behind reacting to a post on e621.
- * @this {Element}
+ * @argument {string} id
  */
-async function e6React() {
+async function e6React(id) {
 	setState('Reacting to Post', 'thumbs_up_down');
 	const post = filtered[currPost];
 	
-	if (this.id == 'fav') {
+	if (id == 'fav') {
 		await fetch(`https://e621.net/favorites.json`, {
 			method: 'POST',
 			headers: {
@@ -933,7 +933,7 @@ async function e6React() {
 			body: `post_id=${post.id}`
 		});
 	} else {
-		let vote = this.id == 'dislike' ? -1 : +1;
+		let vote = id == 'dislike' ? -1 : +1;
 		await fetch(`https://e621.net/posts/${post.id}/votes.json`, {
 			method: 'POST',
 			headers: {
