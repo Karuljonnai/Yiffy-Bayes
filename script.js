@@ -326,15 +326,24 @@ async function searchTag(tag) {
 	
 	return tags;
 }
+const image_exts = ['png', 'jpg', 'gif', 'webp'];
+const video_exts = ['mp4', 'webm'];
 /**
  * Adds a post to the list of post results.
  * @param posts List of posts to be added from e621 JSON response. (see https://e621.net/help/api#posts_list)
  */
 function addPosts(posts) {
 	for (const post of posts) {
+		let type;
+		if (image_exts.includes(post.file.ext)) type = 'img';
+		else if (videos_exts.includes(post.file.ext)) type = 'video';
+		else { // Skip Flash posts
+			console.log(`Skipped post {post.id}; no recognised extension.`);
+			continue;
+		}
 		results.push({
 			id:      post.id,
-			type:    post.duration == null ? 'img' : 'video',
+			type:    type,
 			preview: post.preview.url,
 			file:    post.file.url,
 			tags:    extractTags(post.tags),
