@@ -336,7 +336,7 @@ function addPosts(posts) {
 	for (const post of posts) {
 		let type;
 		if (image_exts.includes(post.file.ext)) type = 'img';
-		else if (videos_exts.includes(post.file.ext)) type = 'video';
+		else if (video_exts.includes(post.file.ext)) type = 'video';
 		else { // Skip Flash posts
 			console.log(`Skipped post {post.id}; no recognised extension.`);
 			continue;
